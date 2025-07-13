@@ -34,7 +34,7 @@ Transform any text into a Jerma985 GIF:
 
 2. **Setup Bot**
    ```bash
-   git clone <https://github.com/MucciDev/jermacaption>
+   git clone https://github.com/MucciDev/jermacaption
    cd jermacaption
    npm install
    ```
