@@ -25,6 +25,7 @@
     "image-size": "^1.0.1",
     "leo-profanity": "^1.5.0",
     "node-canvas-with-twemoji-and-discord-emoji": "^1.2.1",
+    "puppeteer": "^24.12.1",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
