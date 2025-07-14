@@ -103,7 +103,7 @@ If you have questions or need help, open an issue or join the community discussi
 
 ## Requirements
 
-- Node.js 20.x or higher
+- Node.js 20.x
 - FFmpeg for GIF processing
 - Discord bot token and application ID
 
