@@ -2,6 +2,7 @@ import { Browser, Page } from 'puppeteer';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as puppeteer from 'puppeteer';
+import { Buffer } from 'buffer';
 
 interface FontCache {
   [key: string]: Promise<string>;
@@ -42,8 +43,8 @@ const FONT_PATHS = {
 const loadFont = async (fontName: string, fontPath: string): Promise<string> => {
   if (!FONT_CACHE[fontName]) {
     FONT_CACHE[fontName] = fs.readFile(fontPath)
-      .then(buffer => buffer.toString('base64'))
-      .catch(error => {
+      .then((buffer: Buffer) => buffer.toString('base64'))
+      .catch((error: any) => {
         delete FONT_CACHE[fontName];
         throw new Error(`Failed to load font ${fontName}: ${error.message}`);
       });
@@ -53,7 +54,6 @@ const loadFont = async (fontName: string, fontPath: string): Promise<string> => 
 
 const initializeBrowser = async (): Promise<Browser> => {
   const browser = await puppeteer.launch({
-    product: 'chrome',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -271,7 +271,7 @@ const generateImage = async (text: string, id: string): Promise<string> => {
     });
 
     await page.screenshot({
-      path: outputPath,
+      path: outputPath as `${string}.png`,
       type: 'png',
       omitBackground: false,
       clip: {

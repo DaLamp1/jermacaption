@@ -155,7 +155,7 @@ export const launchBot = () => {
       intents: ["GUILD_MESSAGES", "MESSAGE_CONTENT"],
     });
 
-    client.on("interactionCreate", async (interaction) => {
+    client.on("interactionCreate", async (interaction: import("discord.js").Interaction) => {
       if (bannedUsers.includes(interaction.user.id)) {
         if (interaction.isAutocomplete()) return interaction.respond([]);
         if (
@@ -229,7 +229,7 @@ const sanitizeInput = (input: string | undefined): string => {
 
 const returnGIFQuery = (searchQuery: string) => {
   return currentGIFs
-    .filter((result) =>
+    .filter((result: string) =>
       result.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .slice(0, 25);
@@ -240,7 +240,7 @@ const handleAutocomplete = async (interaction: AutocompleteInteraction) => {
   if (searchPhrase === "")
     return interaction.respond(
       currentGIFs
-        .map((result) => ({ name: result, value: result }))
+        .map((result: string) => ({ name: result, value: result }))
         .slice(0, 25)
     );
 
