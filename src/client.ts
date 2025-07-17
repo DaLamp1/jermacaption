@@ -201,8 +201,8 @@ export const launchBot = () => {
         await interaction.deferReply();
         handleNewGIF(
           interaction,
-          sanitizeInput(interaction.options.getString("text") as string),
-          sanitizeInput(interaction.options.getString("gif") as string)
+          sanitizeTextInput(interaction.options.getString("text") as string),
+          sanitizeGifInput(interaction.options.getString("gif") as string)
         );
       }
     });
@@ -222,9 +222,18 @@ export const launchBot = () => {
   }
 };
 
-const sanitizeInput = (input: string | undefined): string => {
+// Separate sanitization functions for different inputs
+const sanitizeTextInput = (input: string | undefined): string => {
   if (!input) return "";
-  return input.replace(/[^a-zA-Z0-9_\- ]/g, ""); // Char check
+  // Allow most printable characters for text, but remove potentially dangerous ones
+  // This removes control characters and some potentially problematic characters
+  return input.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
+};
+
+const sanitizeGifInput = (input: string | undefined): string => {
+  if (!input) return "";
+  // More restrictive for GIF names (filenames)
+  return input.replace(/[^a-zA-Z0-9_\- ]/g, "");
 };
 
 const returnGIFQuery = (searchQuery: string) => {
@@ -236,7 +245,7 @@ const returnGIFQuery = (searchQuery: string) => {
 };
 
 const handleAutocomplete = async (interaction: AutocompleteInteraction) => {
-  const searchPhrase = sanitizeInput(interaction.options.get("gif")?.value as string);
+  const searchPhrase = sanitizeGifInput(interaction.options.get("gif")?.value as string);
   if (searchPhrase === "")
     return interaction.respond(
       currentGIFs
