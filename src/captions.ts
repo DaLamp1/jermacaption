@@ -50,7 +50,7 @@ const preloadFonts = async (): Promise<void> => {
       const buffer = await fs.readFile(path);
       FONT_CACHE[name] = buffer.toString('base64');
     } catch (error) {
-      throw new Error(`Failed to preload font ${name}: ${error.message}`);
+      throw new Error(`Failed to preload font ${name}: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
   
