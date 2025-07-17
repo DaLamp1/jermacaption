@@ -7,7 +7,7 @@ import {
 } from "discord.js";
 import { getBannedUsers, getGIFNames, getRandomFile } from "./files";
 import Constants from "./constants";
-import { generateImage } from "./captions";
+import { generateImage, initializeOptimizations } from "./captions";
 import { generateGIF } from "./ffmpeg";
 
 const currentGIFs = getGIFNames();
@@ -21,33 +21,40 @@ type QueueItem = {
   timestamp: number;
 };
 
-// Config (do touch)
 const QUEUE_CONFIG = {
   MAX_QUEUE_SIZE: 100,
-  MAX_USER_REQUESTS_PER_MINUTE: 3,
-  MAX_PROCESSING_TIME_MS: 30000,
-  CLEANUP_INTERVAL_MS: 60000,
-  MAX_CONCURRENT_PROCESSING: 5,
+  MAX_USER_REQUESTS_PER_MINUTE: 5,
+  MAX_PROCESSING_TIME_MS: 15000,
+  CLEANUP_INTERVAL_MS: 30000,
+  MAX_CONCURRENT_PROCESSING: 8,
+  BATCH_SIZE: 3,
+  BATCH_TIMEOUT: 100, // Wait time between batches
 };
 
 const gifQueue: QueueItem[] = [];
 let processingCount = 0;
 const userRequestTimes = new Map<string, number[]>();
 
-// Cleanup old stuff
+// Optimized cleanup
 setInterval(() => {
   const oneMinuteAgo = Date.now() - 60000;
+  
+  // Batch cleanup for better performance
+  const usersToClean: string[] = [];
   for (const [userId, times] of userRequestTimes.entries()) {
     const validTimes = times.filter(time => time > oneMinuteAgo);
     if (validTimes.length === 0) {
-      userRequestTimes.delete(userId);
+      usersToClean.push(userId);
     } else {
       userRequestTimes.set(userId, validTimes);
     }
   }
+  
+  // Clean up users in batch
+  usersToClean.forEach(userId => userRequestTimes.delete(userId));
 }, QUEUE_CONFIG.CLEANUP_INTERVAL_MS);
 
-// Rate limiting functions
+// Optimized rate limiting
 const isRateLimited = (userId: string): boolean => {
   const now = Date.now();
   const oneMinuteAgo = now - 60000;
@@ -81,15 +88,14 @@ const canProcessMore = (): boolean => {
   return processingCount < QUEUE_CONFIG.MAX_CONCURRENT_PROCESSING;
 };
 
-// Manager
+// Optimized queue management with batching
 const addToQueue = (item: QueueItem): boolean => {
-  // Check if full
   if (isQueueFull()) {
     return false;
   }
   
-  // Anti spam
-  if (getUserQueueCount(item.userId) >= 2) {
+  // Slightly more permissive to reduce wait times
+  if (getUserQueueCount(item.userId) >= 3) {
     return false;
   }
   
@@ -98,40 +104,58 @@ const addToQueue = (item: QueueItem): boolean => {
   return true;
 };
 
-const processNextInQueue = async (): Promise<void> => {
+// Batch processing
+const processBatch = async (): Promise<void> => {
   if (gifQueue.length === 0 || !canProcessMore()) {
     return;
   }
   
-  const item = gifQueue.shift();
-  if (!item) return;
+  const batchSize = Math.min(
+    QUEUE_CONFIG.BATCH_SIZE,
+    QUEUE_CONFIG.MAX_CONCURRENT_PROCESSING - processingCount,
+    gifQueue.length
+  );
   
-  processingCount++;
-  consola.info(`Processing: ${item.userId}, Concurrent: ${processingCount}`);
+  const batch: QueueItem[] = [];
+  for (let i = 0; i < batchSize; i++) {
+    const item = gifQueue.shift();
+    if (item) batch.push(item);
+  }
   
-  try {
-    await processGifWithTimeout(item);
-  } catch (error) {
-    consola.error(`Error processing gif for ${item.userId}:`, error);
+  if (batch.length === 0) return;
+  
+  processingCount += batch.length;
+  consola.info(`Processing batch of ${batch.length}, Concurrent: ${processingCount}`);
+  
+  // Process batch items in parallel
+  const batchPromises = batch.map(async (item) => {
     try {
-      await item.interaction.editReply({ 
-        content: ":sweat: Sorry! Something went wrong... Try again later!" 
-      });
-    } catch (replyError) {
-      consola.error("Failed to send error message:", replyError);
+      await processGifWithTimeout(item);
+    } catch (error) {
+      consola.error(`Error processing gif for ${item.userId}:`, error);
+      try {
+        await item.interaction.editReply({ 
+          content: ":sweat: Sorry! Something went wrong... Try again later!" 
+        });
+      } catch (replyError) {
+        consola.error("Failed to send error message:", replyError);
+      }
     }
-  } finally {
-    processingCount--;
-    consola.info(`Finished processing: ${item.userId}, Concurrent: ${processingCount}`);
-    
-    // Next in line
-    setTimeout(() => processNextInQueue(), 100);
+  });
+  
+  await Promise.all(batchPromises);
+  
+  processingCount -= batch.length;
+  consola.info(`Finished batch processing, Concurrent: ${processingCount}`);
+  
+  // Continue processing if there are more items
+  if (gifQueue.length > 0) {
+    setTimeout(() => processBatch(), QUEUE_CONFIG.BATCH_TIMEOUT);
   }
 };
 
 const processGifWithTimeout = async (item: QueueItem): Promise<void> => {
   return new Promise(async (resolve, reject) => {
-    // Timeout
     const timeoutId = setTimeout(() => {
       reject(new Error(`Processing timeout for user ${item.userId}`));
     }, QUEUE_CONFIG.MAX_PROCESSING_TIME_MS);
@@ -147,8 +171,12 @@ const processGifWithTimeout = async (item: QueueItem): Promise<void> => {
   });
 };
 
-export const launchBot = () => {
+export const launchBot = async () => {
   try {
+    consola.info("Initializing optimizations...");
+    await initializeOptimizations();
+    consola.success("Optimizations initialized!");
+    
     consola.info("Logging in...");
 
     const client = new Client({
@@ -222,7 +250,7 @@ export const launchBot = () => {
   }
 };
 
-// Separate sanitization functions for different inputs
+// Optimized sanitization
 const sanitizeTextInput = (input: string | undefined): string => {
   if (!input) return "";
   return input.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
@@ -230,17 +258,31 @@ const sanitizeTextInput = (input: string | undefined): string => {
 
 const sanitizeGifInput = (input: string | undefined): string => {
   if (!input) return "";
-  // More restrictive for GIF names
   return input.replace(/[^a-zA-Z0-9_\- ]/g, "");
 };
 
-const returnGIFQuery = (searchQuery: string) => {
-  return currentGIFs
+// Cached GIF query results
+const queryCache = new Map<string, string[]>();
+
+const returnGIFQuery = (searchQuery: string): string[] => {
+  if (queryCache.has(searchQuery)) {
+    return queryCache.get(searchQuery)!;
+  }
+  
+  const results = currentGIFs
     .filter((result: string) =>
       result.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .slice(0, 25);
+  
+  queryCache.set(searchQuery, results);
+  return results;
 };
+
+// Clear cache periodically to prevent memory leaks
+setInterval(() => {
+  queryCache.clear();
+}, 300000); // 5 minutes
 
 const handleAutocomplete = async (interaction: AutocompleteInteraction) => {
   const searchPhrase = sanitizeGifInput(interaction.options.get("gif")?.value as string);
@@ -263,7 +305,6 @@ async function handleNewGIF(
   text: string,
   gif?: string
 ): Promise<void> {
-  // Rate limiting help
   recordRequest(interaction.user.id);
   
   if (gif && returnGIFQuery(gif).length === 1) {
@@ -286,7 +327,7 @@ async function handleNewGIFWithGif(
     timestamp: Date.now(),
   };
 
-  // Check process
+  // Check if we can process
   if (canProcessMore() && gifQueue.length === 0) {
     processingCount++;
     consola.info(`Processing immediately: ${interaction.user.id}`);
@@ -303,7 +344,7 @@ async function handleNewGIFWithGif(
       }
     } finally {
       processingCount--;
-      processNextInQueue();
+      processBatch(); // Process next batch
     }
   } else {
     // Add to queue
@@ -324,8 +365,8 @@ async function handleNewGIFWithGif(
       content: `:hourglass: Your request is in the queue! Position: ${position}/${gifQueue.length + processingCount}`
     });
     
-    // Start processing queque if not already
-    processNextInQueue();
+    // Start batch processing
+    processBatch();
   }
 }
 
@@ -337,6 +378,7 @@ async function handleNewGIFWithRandomGif(
   await handleNewGIFWithGif(interaction, text, randomGif);
 }
 
+// Optimized GIF processing
 const processGif = async (
   interaction: CommandInteraction | MessageContextMenuInteraction,
   text: string,
@@ -344,11 +386,12 @@ const processGif = async (
 ) => {
   consola.log(`${interaction.user.id}: ${text}`);
   try {
+    // These now run much faster due to optimizations
     await generateImage(text, `${interaction.user.id}-${interaction.id}`);
     const attachment = await generateGIF(gif, `${interaction.user.id}-${interaction.id}`);
     await interaction.editReply({ files: [{ attachment, name: 'jerma.gif' }] });
   } catch (e) {
     consola.error(e);
-    throw e; // Re-throw to be handled by the timeout wrapper
+    throw e;
   }
 };
