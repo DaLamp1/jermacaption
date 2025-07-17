@@ -25,8 +25,8 @@ type QueueItem = {
 const QUEUE_CONFIG = {
   MAX_QUEUE_SIZE: 100,
   MAX_USER_REQUESTS_PER_MINUTE: 3,
-  MAX_PROCESSING_TIME_MS: 30000, // 30 seconds
-  CLEANUP_INTERVAL_MS: 60000, // 1 minute
+  MAX_PROCESSING_TIME_MS: 30000,
+  CLEANUP_INTERVAL_MS: 60000,
   MAX_CONCURRENT_PROCESSING: 5,
 };
 
@@ -225,14 +225,12 @@ export const launchBot = () => {
 // Separate sanitization functions for different inputs
 const sanitizeTextInput = (input: string | undefined): string => {
   if (!input) return "";
-  // Allow most printable characters for text, but remove potentially dangerous ones
-  // This removes control characters and some potentially problematic characters
   return input.replace(/[\x00-\x1F\x7F-\x9F]/g, "").trim();
 };
 
 const sanitizeGifInput = (input: string | undefined): string => {
   if (!input) return "";
-  // More restrictive for GIF names (filenames)
+  // More restrictive for GIF names
   return input.replace(/[^a-zA-Z0-9_\- ]/g, "");
 };
 
