@@ -28,7 +28,7 @@ const QUEUE_CONFIG = {
   CLEANUP_INTERVAL_MS: 30000,
   MAX_CONCURRENT_PROCESSING: 8,
   BATCH_SIZE: 3,
-  BATCH_TIMEOUT: 100, // Wait time between batches
+  BATCH_TIMEOUT: 600, // Wait time between batches
 };
 
 const gifQueue: QueueItem[] = [];
