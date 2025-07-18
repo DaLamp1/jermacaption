@@ -86,8 +86,7 @@ npm install
 ### 4. Run
 
 ```bash
-npm run compile
-npm start
+npx ts-node src/index.ts
 ```
 
 ## Contributing
